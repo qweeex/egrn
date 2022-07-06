@@ -6,7 +6,7 @@ const ApiEGRN = require('./api/ApiEGRN')
  SOPP - Отчет об изменениях прав на объект недвижимости
  SKS - Отчет об установлении и/или изменении кадастровой стоимости объекта недвижимости
  KPT  - Отчет об объектах недвижимости в пределах кадастрового плана территории*/
-const Init = async (docType = 'XZP') => {
+const Init = async (docType = 'XZP', payType = 'free') => {
     try {
         console.log('------------------------------------------');
         console.log('Старт работы')
@@ -32,35 +32,61 @@ const Init = async (docType = 'XZP') => {
             }).then(async (doc) => {
                 if (doc.paid === false){
                     console.log(`Заказ оформлен и передан в обработку. Номер заказа ${doc.transaction_id}, номер документа в заказе ${doc.documents_id[docType]}`);
-                } else {
-                    console.log('Если заказ ожидает оплаты, т.е. если тариф у нас "Базовый" ')
-                    console.log('# Пытаемся оплатить с лицевого счета')
-                    console.log('3 этап: Получаем перечень всех возможных способов оплаты')
-                    await ApiEGRN.RequestAPI('Transaction/info', {
-                        'id': doc.transaction_id
-                    }).then(async (trans) => {
-                        // Если оплата с лицевого счета разрешена
-                        if (trans['pay_methods']['PA']['allowed'] === true){
-                            if (trans['pay_methods']['PA']['sufficient_funds'] === true){
-                                console.log("Подтверждаем оплату")
-                                await ApiEGRN.RequestAPI('Transaction/pay', {
-                                    'id': doc.transaction_id,
-                                    'confirm': trans['pay_methods']['PA']['confirm_code']
-                                }).then(async (pay) => {
-                                    if (pay.paid === true){
-                                        console.log(`Заказ оплачен и передан в обработку. Номер заказа ${doc.transaction_id}, , номер документа в заказе ${doc.documents_id[docType]}`);
-                                    } else {
-                                        console.log('Не удалось оплатить заказ')
-                                    }
-                                })
-                            } else {
-                                console.log('Недостаточно средств на лицевом счете. Воспользуйтесь другими способами оплаты.')
-                            }
-                        } else {
-                            console.log('Оплата с лицевого счета не допускается для этого заказа.')
-                        }
-                    })
                 }
+                console.log('Если заказ ожидает оплаты, т.е. если тариф у нас "Базовый" ')
+                console.log('# Пытаемся оплатить с лицевого счета')
+                console.log('3 этап: Получаем перечень всех возможных способов оплаты')
+                await ApiEGRN.RequestAPI('Transaction/info', {
+                    'id': doc.transaction_id
+                }).then(async (trans) => {
+                    switch (payType) {
+                        case 'PA':
+                            console.log('Проводим оплату с лицевого счета')
+                            if (trans['pay_methods']['PA']['allowed'] === true){
+                                if (trans['pay_methods']['PA']['sufficient_funds'] === true){
+                                    console.log("Подтверждаем оплату")
+                                    await ApiEGRN.RequestAPI('Transaction/pay', {
+                                        'id': doc.transaction_id,
+                                        'confirm': trans['pay_methods']['PA']['confirm_code']
+                                    }).then(async (pay) => {
+                                        if (pay.paid === true){
+                                            console.log(`Заказ оплачен и передан в обработку. Номер заказа ${doc.transaction_id}, , номер документа в заказе ${doc.documents_id[docType]}`);
+                                        } else {
+                                            console.log('Не удалось оплатить заказ')
+                                        }
+                                    })
+                                } else {
+                                    console.log('Недостаточно средств на лицевом счете. Воспользуйтесь другими способами оплаты.')
+                                }
+                            } else {
+                                console.log('Оплата  не допускается для этого заказа.')
+                            }
+                            break;
+                        case 'free':
+                            console.log('Проводим бесплатно')
+                            if (trans['pay_methods']['free']['allowed'] === true){
+                                if (trans['pay_methods']['free']['confirm_code']){
+                                    console.log("Подтверждаем оплату")
+                                    await ApiEGRN.RequestAPI('Transaction/pay', {
+                                        'id': doc.transaction_id,
+                                        'confirm': trans['pay_methods']['free']['confirm_code']
+                                    }).then(async (pay) => {
+                                        if (pay.paid === true){
+                                            console.log(`Заказ оплачен и передан в обработку. Номер заказа ${doc.transaction_id}, , номер документа в заказе ${doc.documents_id[docType]}`);
+                                        } else {
+                                            console.log('Не удалось оплатить заказ')
+                                        }
+                                    })
+                                } else {
+                                    console.log('Недостаточно средств на лицевом счете. Воспользуйтесь другими способами оплаты.')
+                                }
+                            } else {
+                                console.log('Оплата  не допускается для этого заказа.')
+                            }
+                    }
+
+
+                })
             })
         })
 
